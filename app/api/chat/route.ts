@@ -32,8 +32,12 @@ Seja conversacional e profissional.`
       }]
     });
 
+    // 🔧 CORREÇÃO AQUI: Verificar o tipo do conteúdo
+    const textContent = response.content.find(block => block.type === 'text');
+    const responseText = textContent && 'text' in textContent ? textContent.text : 'Erro ao processar resposta';
+
     return NextResponse.json({ 
-      response: response.content[0].text 
+      response: responseText
     });
 
   } catch (error) {
