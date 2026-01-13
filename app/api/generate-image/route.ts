@@ -17,6 +17,14 @@ export async function POST(req: Request) {
       quality: "standard",
     });
 
+    // 🔧 CORREÇÃO: Verificar se data existe
+    if (!response.data || response.data.length === 0) {
+      return NextResponse.json(
+        { error: 'Nenhuma imagem foi gerada' },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({ 
       imageUrl: response.data[0].url 
     });
