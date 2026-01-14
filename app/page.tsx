@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Send, Sparkles, Loader2, Image as ImageIcon, Download, Coins, AlertCircle, LogOut } from 'lucide-react';
+import { Send, Sparkles, Loader2, Image as ImageIcon, Download, Coins, AlertCircle, LogOut, Film } from 'lucide-react';
 import AuthForm from '@/components/AuthForm';
 
 interface Message {
@@ -10,6 +10,7 @@ interface Message {
   content: string;
   hasPrompt?: boolean;
   imageUrl?: string;
+  videoUrl?: string;
 }
 
 interface UserData {
@@ -17,6 +18,7 @@ interface UserData {
   email: string;
   name: string;
   credits_images: number;
+  credits_videos: number;
   plan: string;
 }
 
@@ -27,12 +29,13 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'Olá! Sou seu assistente de criação visual da TMG Studio. Descreva o material que você precisa e vou te ajudar a criar imagens e vídeos personalizados!'
+      content: 'Olá! Sou seu assistente de criação visual da TMG Studio. Descreva o material que você precisa e vou te ajudar a criar imagens e vídeos personalizados com IA!'
     }
   ]);
   const [input, setInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [generatingVideo, setGeneratingVideo] = useState(false);
   const [showCreditAlert, setShowCreditAlert] = useState(false);
 
   useEffect(() => {
@@ -111,7 +114,10 @@ export default function Home() {
                        assistantMessage.toLowerCase().includes('imagem') ||
                        assistantMessage.toLowerCase().includes('banner') ||
                        assistantMessage.toLowerCase().includes('logo') ||
-                       assistantMessage.toLowerCase().includes('criar');
+                       assistantMessage.toLowerCase().includes('criar') ||
+                       assistantMessage.toLowerCase().includes('vídeo') ||
+                       assistantMessage.toLowerCase().includes('video') ||
+                       assistantMessage.toLowerCase().includes('animação');
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
@@ -176,17 +182,65 @@ export default function Home() {
     }
   };
 
-  const getCreditColor = () => {
+  const generateVideo = async (messageIndex: number) => {
+    if (!userData || userData.credits_videos <= 0) {
+      alert('Você não tem créditos de vídeo suficientes!');
+      return;
+    }
+
+    setGeneratingVideo(true);
+    
+    try {
+      const message = messages[messageIndex];
+      const prompt = message.content;
+
+      const res = await fetch('/api/generate-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      const data = await res.json();
+      
+      if (data.videoUrl) {
+        const { error } = await supabase
+          .from('users')
+          .update({ credits_videos: userData.credits_videos - 1 })
+          .eq('id', user.id);
+
+        if (!error) {
+          setUserData(prev => prev ? { ...prev, credits_videos: prev.credits_videos - 1 } : null);
+        }
+        
+        setMessages(prev => prev.map((msg, idx) => 
+          idx === messageIndex 
+            ? { ...msg, videoUrl: data.videoUrl }
+            : msg
+        ));
+      } else {
+        alert('Erro ao gerar vídeo: ' + (data.error || 'Erro desconhecido'));
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao gerar vídeo. Tente novamente.');
+    } finally {
+      setGeneratingVideo(false);
+    }
+  };
+
+  const getCreditColor = (type: 'image' | 'video') => {
     if (!userData) return 'text-gray-600';
-    if (userData.credits_images > 20) return 'text-green-600';
-    if (userData.credits_images > 10) return 'text-yellow-600';
+    const credits = type === 'image' ? userData.credits_images : userData.credits_videos;
+    if (credits > 20) return 'text-green-600';
+    if (credits > 5) return 'text-yellow-600';
     return 'text-red-600';
   };
 
-  const getCreditBgColor = () => {
+  const getCreditBgColor = (type: 'image' | 'video') => {
     if (!userData) return 'bg-gray-50 border-gray-200';
-    if (userData.credits_images > 20) return 'bg-green-50 border-green-200';
-    if (userData.credits_images > 10) return 'bg-yellow-50 border-yellow-200';
+    const credits = type === 'image' ? userData.credits_images : userData.credits_videos;
+    if (credits > 20) return 'bg-green-50 border-green-200';
+    if (credits > 5) return 'bg-yellow-50 border-yellow-200';
     return 'bg-red-50 border-red-200';
   };
 
@@ -216,13 +270,23 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="flex items-center space-x-4">
-            <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-2 ${getCreditBgColor()}`}>
-              <Coins className={`w-5 h-5 ${getCreditColor()}`} />
+          <div className="flex items-center space-x-3">
+            <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg border-2 ${getCreditBgColor('image')}`}>
+              <ImageIcon className={`w-4 h-4 ${getCreditColor('image')}`} />
               <div>
-                <div className="text-xs text-gray-500">Créditos</div>
-                <div className={`text-lg font-bold ${getCreditColor()}`}>
+                <div className="text-xs text-gray-500">Imagens</div>
+                <div className={`text-sm font-bold ${getCreditColor('image')}`}>
                   {userData?.credits_images || 0}
+                </div>
+              </div>
+            </div>
+
+            <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg border-2 ${getCreditBgColor('video')}`}>
+              <Film className={`w-4 h-4 ${getCreditColor('video')}`} />
+              <div>
+                <div className="text-xs text-gray-500">Vídeos</div>
+                <div className={`text-sm font-bold ${getCreditColor('video')}`}>
+                  {userData?.credits_videos || 0}
                 </div>
               </div>
             </div>
@@ -252,20 +316,6 @@ export default function Home() {
         </div>
       )}
 
-      {userData && userData.credits_images > 0 && userData.credits_images <= 10 && !showCreditAlert && (
-        <div className="max-w-4xl mx-auto px-6 pt-4">
-          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 flex items-start space-x-3">
-            <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-yellow-900">Créditos Baixos</h3>
-              <p className="text-sm text-yellow-700 mt-1">
-                Você tem apenas {userData.credits_images} créditos restantes.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col" style={{height: 'calc(100vh - 200px)'}}>
           
@@ -279,29 +329,44 @@ export default function Home() {
                 }`}>
                   <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                   
-                  {msg.role === 'assistant' && msg.hasPrompt && !msg.imageUrl && (
-                    <button
-                      onClick={() => generateImage(idx)}
-                      disabled={generatingImage || !userData || userData.credits_images <= 0}
-                      className="mt-3 w-full bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 text-sm font-medium"
-                    >
-                      {generatingImage ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Gerando imagem...</span>
-                        </>
-                      ) : !userData || userData.credits_images <= 0 ? (
-                        <>
-                          <AlertCircle className="w-4 h-4" />
-                          <span>Sem Créditos</span>
-                        </>
-                      ) : (
-                        <>
-                          <ImageIcon className="w-4 h-4" />
-                          <span>Gerar Imagem (1 crédito)</span>
-                        </>
-                      )}
-                    </button>
+                  {msg.role === 'assistant' && msg.hasPrompt && !msg.imageUrl && !msg.videoUrl && (
+                    <div className="mt-3 space-y-2">
+                      <button
+                        onClick={() => generateImage(idx)}
+                        disabled={generatingImage || generatingVideo || !userData || userData.credits_images <= 0}
+                        className="w-full bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 text-sm font-medium"
+                      >
+                        {generatingImage ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Gerando imagem...</span>
+                          </>
+                        ) : (
+                          <>
+                            <ImageIcon className="w-4 h-4" />
+                            <span>Gerar Imagem (1 crédito)</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => generateVideo(idx)}
+                        disabled={generatingImage || generatingVideo || !userData || userData.credits_videos <= 0}
+                        className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 text-sm font-medium"
+                      >
+                        {generatingVideo ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Gerando vídeo... (1-2 min)</span>
+                          </>
+                        ) : (
+                          <>
+                            <Film className="w-4 h-4" />
+                            <span>Gerar Vídeo (1 crédito)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   )}
                   
                   {msg.imageUrl && (
@@ -320,6 +385,28 @@ export default function Home() {
                       >
                         <Download className="w-4 h-4" />
                         <span>Baixar Imagem</span>
+                      </a>
+                    </div>
+                  )}
+
+                  {msg.videoUrl && (
+                    <div className="mt-3 space-y-2">
+                      <video 
+                        src={msg.videoUrl} 
+                        controls
+                        className="w-full rounded-lg border-2 border-purple-200"
+                      >
+                        Seu navegador não suporta vídeos.
+                      </video>
+                      <a
+                        href={msg.videoUrl}
+                        download="tmg-studio-video.mp4"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Baixar Vídeo</span>
                       </a>
                     </div>
                   )}
@@ -344,7 +431,7 @@ export default function Home() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder="Descreva o material visual que você precisa..."
+                placeholder="Descreva a imagem ou vídeo que você precisa..."
                 className="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 disabled={chatLoading}
               />
@@ -358,7 +445,7 @@ export default function Home() {
               </button>
             </div>
             <div className="mt-2 text-xs text-gray-500 text-center">
-              Plano: {userData?.plan || 'Free'} • {userData?.credits_images || 0} créditos restantes
+              {userData?.plan || 'Free'} • {userData?.credits_images || 0} imagens • {userData?.credits_videos || 0} vídeos
             </div>
           </div>
         </div>
