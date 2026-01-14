@@ -5,91 +5,62 @@ export async function POST(req: Request) {
   try {
     const { prompt } = await req.json();
 
-    console.log('=== INICIANDO GERAÇÃO DE VÍDEO ===');
-    console.log('Prompt:', prompt);
+    console.log('Iniciando geração de vídeo:', prompt);
 
     if (!process.env.REPLICATE_API_TOKEN) {
-      console.error('Token do Replicate não configurado');
       return NextResponse.json(
-        { error: 'Token do Replicate não configurado no servidor' },
+        { error: 'Token não configurado' },
         { status: 500 }
       );
     }
-
-    console.log('Token presente:', process.env.REPLICATE_API_TOKEN.substring(0, 10) + '...');
 
     const replicate = new Replicate({
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    console.log('Cliente Replicate criado');
-    console.log('Chamando modelo AnimateDiff...');
-    
+    console.log('Chamando Zeroscope v2...');
+
+    // Usando Zeroscope v2 - modelo mais estável para vídeos
     const output: any = await replicate.run(
-      "lucataco/animate-diff:beecf59c4aee8d81bf04f0381033dfa10dc16e845b4ae00d281e2fa377e48a9f",
+      "anotherjesse/zeroscope-v2-xl:9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351",
       {
         input: {
           prompt: prompt,
-          num_frames: 16,
-          guidance_scale: 7.5,
-          num_inference_steps: 25,
+          num_frames: 24,
+          num_inference_steps: 50,
         }
       }
     );
 
-    console.log('Output recebido:', JSON.stringify(output, null, 2));
-    console.log('Tipo do output:', typeof output);
-    console.log('É array?', Array.isArray(output));
+    console.log('Output recebido:', output);
 
+    // Zeroscope retorna array de URLs
     let videoUrl = null;
     
-    if (typeof output === 'string') {
-      console.log('Output é string direta');
+    if (Array.isArray(output) && output.length > 0) {
+      videoUrl = output[0];
+    } else if (typeof output === 'string') {
       videoUrl = output;
-    } else if (Array.isArray(output)) {
-      console.log('Output é array, tamanho:', output.length);
-      if (output.length > 0) {
-        videoUrl = output[0];
-        console.log('Primeira posição do array:', videoUrl);
-      }
-    } else if (output && typeof output === 'object') {
-      console.log('Output é objeto, chaves:', Object.keys(output));
-      videoUrl = output.video || output.output || output.url || output.mp4;
     }
 
     if (!videoUrl) {
-      console.error('URL do vídeo não encontrada!');
-      console.error('Output completo:', JSON.stringify(output, null, 2));
+      console.error('URL não encontrada. Output:', output);
       return NextResponse.json(
-        { 
-          error: 'Vídeo gerado mas URL não encontrada',
-          debug: {
-            outputType: typeof output,
-            outputKeys: output && typeof output === 'object' ? Object.keys(output) : null,
-            output: output
-          }
-        },
+        { error: 'Vídeo gerado mas URL não encontrada' },
         { status: 500 }
       );
     }
 
-    console.log('=== VÍDEO GERADO COM SUCESSO ===');
-    console.log('URL do vídeo:', videoUrl);
+    console.log('Vídeo gerado:', videoUrl);
 
     return NextResponse.json({ 
       videoUrl: videoUrl
     });
 
   } catch (error: any) {
-    console.error('=== ERRO NA GERAÇÃO ===');
-    console.error('Mensagem:', error.message);
-    console.error('Stack:', error.stack);
-
+    console.error('Erro:', error.message);
     return NextResponse.json(
-      { 
-        error: error.message || 'Erro desconhecido ao gerar vídeo',
-        details: error.toString()
-      }, 
+      { error: error.message || 'Erro ao gerar vídeo' }, 
       { status: 500 }
     );
   }
