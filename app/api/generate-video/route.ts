@@ -12,23 +12,49 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log('Gerando vídeo com Hotshot-XL:', prompt);
+    console.log('Gerando vídeo com Stable Video Diffusion:', prompt);
 
     const replicate = new Replicate({
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    // Usar predictions API para ter controle sobre o polling
+    // PASSO 1: Primeiro gerar uma imagem com DALL-E
+    console.log('Gerando imagem base com DALL-E...');
+    
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: 'OpenAI API key não configurada' },
+        { status: 500 }
+      );
+    }
+
+    const OpenAI = require('openai');
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    const imageResponse = await openai.images.generate({
+      model: "dall-e-3",
+      prompt: prompt,
+      n: 1,
+      size: "1024x1024",
+      quality: "standard",
+    });
+
+    const imageUrl = imageResponse.data[0].url;
+    console.log('Imagem base gerada:', imageUrl);
+
+    // PASSO 2: Animar a imagem com Stable Video Diffusion
+    console.log('Animando imagem com Stable Video Diffusion...');
+
     const prediction = await replicate.predictions.create({
-      version: "78b3a6257e16e4b241245d65c8b2b81ea2e1ff7ed4c55306b511509ddbfd327a",
+      version: "3f0457e4619daac51203dedb472816fd4af51f3149fa7a9e0b5ffcf1b8172438",
       input: {
-        prompt: prompt,
-        negative_prompt: "blurry, low quality, distorted, watermark",
-        width: 512,
-        height: 512,
-        num_inference_steps: 30,
-        guidance_scale: 7.5,
-        video_length: 8,
+        input_image: imageUrl,
+        sizing_strategy: "maintain_aspect_ratio",
+        frames_per_second: 6,
+        motion_bucket_id: 127,
+        cond_aug: 0.02,
       }
     });
 
@@ -37,7 +63,7 @@ export async function POST(req: Request) {
     // Aguardar vídeo ficar pronto
     let completedPrediction = prediction;
     let attempts = 0;
-    const maxAttempts = 120; // 4 minutos
+    const maxAttempts = 120;
 
     while (
       completedPrediction.status !== "succeeded" &&
@@ -45,10 +71,8 @@ export async function POST(req: Request) {
       attempts < maxAttempts
     ) {
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
       completedPrediction = await replicate.predictions.get(prediction.id);
       console.log(`Status (${attempts + 1}):`, completedPrediction.status);
-      
       attempts++;
     }
 
@@ -61,36 +85,25 @@ export async function POST(req: Request) {
     }
 
     if (completedPrediction.status !== "succeeded") {
-      console.error('Timeout na geração');
       return NextResponse.json(
-        { error: 'Timeout: vídeo demorou muito para ser gerado' },
+        { error: 'Timeout na geração do vídeo' },
         { status: 500 }
       );
     }
 
-    console.log('Prediction completa:', completedPrediction);
-    console.log('Output:', completedPrediction.output);
-
-    let videoUrl = null;
     const output = completedPrediction.output;
+    let videoUrl = null;
 
     if (typeof output === 'string') {
       videoUrl = output;
     } else if (Array.isArray(output)) {
-      videoUrl = output[output.length - 1];
-    } else if (output && typeof output === 'object') {
-      // Tentar várias propriedades possíveis
-      videoUrl = (output as any).video || (output as any).mp4 || (output as any).url || (output as any).output;
+      videoUrl = output[0];
     }
 
-    if (!videoUrl || typeof videoUrl !== 'string') {
-      console.error('URL não encontrada no output:', output);
+    if (!videoUrl) {
+      console.error('URL não encontrada:', output);
       return NextResponse.json(
-        { 
-          error: 'Vídeo gerado mas URL não encontrada',
-          outputType: typeof output,
-          output: output
-        },
+        { error: 'Vídeo gerado mas URL não encontrada' },
         { status: 500 }
       );
     }
@@ -104,10 +117,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error('Erro completo:', error);
     return NextResponse.json(
-      { 
-        error: error.message || 'Erro ao gerar vídeo',
-        details: error.toString()
-      }, 
+      { error: error.message || 'Erro ao gerar vídeo' }, 
       { status: 500 }
     );
   }
