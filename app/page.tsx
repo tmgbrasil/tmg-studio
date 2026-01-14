@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Send, Sparkles, Loader2, Image as ImageIcon, Download, Coins, AlertCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { Send, Sparkles, Loader2, Image as ImageIcon, Download, Coins, AlertCircle, LogOut, User } from 'lucide-react';
+import AuthForm from '@/components/AuthForm';
 
 interface Message {
   role: string;
@@ -10,7 +12,18 @@ interface Message {
   imageUrl?: string;
 }
 
+interface UserData {
+  id: string;
+  email: string;
+  name: string;
+  credits_images: number;
+  plan: string;
+}
+
 export default function Home() {
+  const [user, setUser] = useState<any>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
@@ -18,31 +31,71 @@ export default function Home() {
     }
   ]);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
-  const [credits, setCredits] = useState(50); // Créditos iniciais
   const [showCreditAlert, setShowCreditAlert] = useState(false);
 
-  // Carregar créditos do localStorage ao iniciar
+  // Verificar autenticação ao carregar
   useEffect(() => {
-    const savedCredits = localStorage.getItem('tmg_credits');
-    if (savedCredits) {
-      setCredits(parseInt(savedCredits));
-    }
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        loadUserData(session.user.id);
+      } else {
+        setUser(null);
+        setUserData(null);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
-  // Salvar créditos no localStorage sempre que mudar
-  useEffect(() => {
-    localStorage.setItem('tmg_credits', credits.toString());
-  }, [credits]);
+  const checkUser = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+        await loadUserData(session.user.id);
+      }
+    } catch (error) {
+      console.error('Erro ao verificar usuário:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUserData = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+      setUserData(data);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setUserData(null);
+  };
 
   const sendMessage = async () => {
-    if (!input.trim() || loading) return;
+    if (!input.trim() || chatLoading) return;
 
     const userMessage = input;
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-    setLoading(true);
+    setChatLoading(true);
 
     try {
       const res = await fetch('/api/chat', {
@@ -73,13 +126,12 @@ export default function Home() {
         content: 'Desculpe, houve um erro ao processar sua mensagem.'
       }]);
     } finally {
-      setLoading(false);
+      setChatLoading(false);
     }
   };
 
   const generateImage = async (messageIndex: number) => {
-    // Verificar se tem créditos
-    if (credits <= 0) {
+    if (!userData || userData.credits_images <= 0) {
       setShowCreditAlert(true);
       setTimeout(() => setShowCreditAlert(false), 5000);
       return;
@@ -100,10 +152,16 @@ export default function Home() {
       const data = await res.json();
       
       if (data.imageUrl) {
-        // Decrementar créditos
-        setCredits(prev => prev - 1);
+        // Decrementar créditos no banco
+        const { error } = await supabase
+          .from('users')
+          .update({ credits_images: userData.credits_images - 1 })
+          .eq('id', user.id);
+
+        if (!error) {
+          setUserData(prev => prev ? { ...prev, credits_images: prev.credits_images - 1 } : null);
+        }
         
-        // Atualizar mensagem com a imagem
         setMessages(prev => prev.map((msg, idx) => 
           idx === messageIndex 
             ? { ...msg, imageUrl: data.imageUrl }
@@ -121,17 +179,34 @@ export default function Home() {
   };
 
   const getCreditColor = () => {
-    if (credits > 20) return 'text-green-600';
-    if (credits > 10) return 'text-yellow-600';
+    if (!userData) return 'text-gray-600';
+    if (userData.credits_images > 20) return 'text-green-600';
+    if (userData.credits_images > 10) return 'text-yellow-600';
     return 'text-red-600';
   };
 
   const getCreditBgColor = () => {
-    if (credits > 20) return 'bg-green-50 border-green-200';
-    if (credits > 10) return 'bg-yellow-50 border-yellow-200';
+    if (!userData) return 'bg-gray-50 border-gray-200';
+    if (userData.credits_images > 20) return 'bg-green-50 border-green-200';
+    if (userData.credits_images > 10) return 'bg-yellow-50 border-yellow-200';
     return 'bg-red-50 border-red-200';
   };
 
+  // Tela de loading
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
+      </div>
+    );
+  }
+
+  // Tela de login
+  if (!user) {
+    return <AuthForm onSuccess={checkUser} />;
+  }
+
+  // Tela principal (logado)
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-gray-50">
       {/* Header */}
@@ -143,24 +218,35 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">TMG Studio</h1>
-              <p className="text-xs text-gray-500">Crie materiais visuais com IA</p>
+              <p className="text-xs text-gray-500">Olá, {userData?.name || 'Usuário'}!</p>
             </div>
           </div>
           
-          {/* Contador de Créditos */}
-          <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-2 ${getCreditBgColor()}`}>
-            <Coins className={`w-5 h-5 ${getCreditColor()}`} />
-            <div>
-              <div className="text-xs text-gray-500">Créditos</div>
-              <div className={`text-lg font-bold ${getCreditColor()}`}>
-                {credits}
+          <div className="flex items-center space-x-4">
+            {/* Contador de Créditos */}
+            <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-2 ${getCreditBgColor()}`}>
+              <Coins className={`w-5 h-5 ${getCreditColor()}`} />
+              <div>
+                <div className="text-xs text-gray-500">Créditos</div>
+                <div className={`text-lg font-bold ${getCreditColor()}`}>
+                  {userData?.credits_images || 0}
+                </div>
               </div>
             </div>
+
+            {/* Botão Logout */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="text-sm font-medium">Sair</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Alerta de Créditos Esgotados */}
+      {/* Alertas */}
       {showCreditAlert && (
         <div className="max-w-4xl mx-auto px-6 pt-4">
           <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 flex items-start space-x-3">
@@ -168,22 +254,21 @@ export default function Home() {
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-red-900">Créditos Esgotados</h3>
               <p className="text-sm text-red-700 mt-1">
-                Você não tem créditos suficientes para gerar imagens. Entre em contato para renovar seu plano!
+                Você não tem créditos suficientes. Entre em contato para renovar seu plano!
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Alerta de Créditos Baixos */}
-      {credits > 0 && credits <= 10 && !showCreditAlert && (
+      {userData && userData.credits_images > 0 && userData.credits_images <= 10 && !showCreditAlert && (
         <div className="max-w-4xl mx-auto px-6 pt-4">
           <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 flex items-start space-x-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-yellow-900">Créditos Baixos</h3>
               <p className="text-sm text-yellow-700 mt-1">
-                Você tem apenas {credits} créditos restantes. Considere renovar seu plano em breve.
+                Você tem apenas {userData.credits_images} créditos restantes.
               </p>
             </div>
           </div>
@@ -207,7 +292,7 @@ export default function Home() {
                   {msg.role === 'assistant' && msg.hasPrompt && !msg.imageUrl && (
                     <button
                       onClick={() => generateImage(idx)}
-                      disabled={generatingImage || credits <= 0}
+                      disabled={generatingImage || !userData || userData.credits_images <= 0}
                       className="mt-3 w-full bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 text-sm font-medium"
                     >
                       {generatingImage ? (
@@ -215,7 +300,7 @@ export default function Home() {
                           <Loader2 className="w-4 h-4 animate-spin" />
                           <span>Gerando imagem...</span>
                         </>
-                      ) : credits <= 0 ? (
+                      ) : !userData || userData.credits_images <= 0 ? (
                         <>
                           <AlertCircle className="w-4 h-4" />
                           <span>Sem Créditos</span>
@@ -236,7 +321,7 @@ export default function Home() {
                         alt="Imagem gerada" 
                         className="w-full rounded-lg border-2 border-orange-200"
                       />
-                      <a
+                      
                         href={msg.imageUrl}
                         download="tmg-studio-image.png"
                         target="_blank"
@@ -252,7 +337,7 @@ export default function Home() {
               </div>
             ))}
             
-            {loading && (
+            {chatLoading && (
               <div className="flex justify-start">
                 <div className="bg-gray-100 text-gray-800 rounded-lg px-4 py-3 flex items-center space-x-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -271,11 +356,11 @@ export default function Home() {
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                 placeholder="Descreva o material visual que você precisa..."
                 className="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                disabled={loading}
+                disabled={chatLoading}
               />
               <button
                 onClick={sendMessage}
-                disabled={loading || !input.trim()}
+                disabled={chatLoading || !input.trim()}
                 className="bg-orange-600 text-white px-6 py-3 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
               >
                 <Send className="w-5 h-5" />
@@ -283,7 +368,7 @@ export default function Home() {
               </button>
             </div>
             <div className="mt-2 text-xs text-gray-500 text-center">
-              Exemplos: banner para promoção de pizza • logo moderno para salão • post Instagram café
+              Plano: {userData?.plan || 'Free'} • {userData?.credits_images || 0} créditos restantes
             </div>
           </div>
         </div>
