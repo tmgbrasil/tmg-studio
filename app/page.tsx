@@ -389,14 +389,32 @@ export default function Home() {
                     </div>
                   )}
 
-                  {msg.videoUrl && (
-                    <div className="mt-3 space-y-2">
-                      <video 
-                        src={msg.videoUrl} 
-                        controls
-                        className="w-full rounded-lg border-2 border-purple-200"
-                      >
-                        Seu navegador não suporta vídeos.
+{msg.videoUrl && (
+  <div className="mt-3 space-y-2">
+    <video 
+      src={msg.videoUrl} 
+      controls
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="auto"
+      className="w-full rounded-lg border-2 border-purple-200 bg-black"
+      onError={(e) => {
+        console.error('Erro ao carregar vídeo:', e);
+        const target = e.target as HTMLVideoElement;
+        target.style.display = 'none';
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'text-sm text-red-600 p-4';
+        errorDiv.textContent = 'Erro ao carregar preview. Use o botão de download.';
+        target.parentNode?.insertBefore(errorDiv, target);
+      }}
+    >
+      Seu navegador não suporta vídeos.
+    </video>
+    <div className="text-xs text-gray-500 text-center">
+      Formato: MP4 • Se o vídeo não aparecer, use o botão abaixo para baixar
+    </div>
                       </video>
                       <a
                         href={msg.videoUrl}
