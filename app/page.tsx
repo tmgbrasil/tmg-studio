@@ -389,7 +389,7 @@ export default function Home() {
                     </div>
                   )}
 
-{msg.videoUrl && (
+                  {msg.videoUrl && (
                     <div className="mt-3 space-y-2">
                       <video 
                         src={msg.videoUrl} 
@@ -405,11 +405,10 @@ export default function Home() {
                       </video>
                       
                       <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                        💡 <strong>Dica:</strong> O vídeo pode demorar alguns segundos para carregar. 
-                        Se não aparecer, clique no botão de download abaixo!
+                        💡 <strong>Dica:</strong> O vídeo pode demorar alguns segundos para carregar. Se não aparecer, clique no botão de download abaixo!
                       </div>
                       
-                      
+                      <a
                         href={msg.videoUrl}
                         download="tmg-studio-video.mp4"
                         target="_blank"
@@ -421,6 +420,9 @@ export default function Home() {
                       </a>
                     </div>
                   )}
+                </div>
+              </div>
+            ))}
             
             {chatLoading && (
               <div className="flex justify-start">
