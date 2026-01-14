@@ -390,33 +390,26 @@ export default function Home() {
                   )}
 
 {msg.videoUrl && (
-  <div className="mt-3 space-y-2">
-    <video 
-      src={msg.videoUrl} 
-      controls
-      autoPlay
-      loop
-      muted
-      playsInline
-      preload="auto"
-      className="w-full rounded-lg border-2 border-purple-200 bg-black"
-      onError={(e) => {
-        console.error('Erro ao carregar vídeo:', e);
-        const target = e.target as HTMLVideoElement;
-        target.style.display = 'none';
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'text-sm text-red-600 p-4';
-        errorDiv.textContent = 'Erro ao carregar preview. Use o botão de download.';
-        target.parentNode?.insertBefore(errorDiv, target);
-      }}
-    >
-      Seu navegador não suporta vídeos.
-    </video>
-    <div className="text-xs text-gray-500 text-center">
-      Formato: MP4 • Se o vídeo não aparecer, use o botão abaixo para baixar
-    </div>
+                    <div className="mt-3 space-y-2">
+                      <video 
+                        src={msg.videoUrl} 
+                        controls
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        preload="auto"
+                        className="w-full rounded-lg border-2 border-purple-200 bg-black"
+                      >
+                        Seu navegador não suporta vídeos.
                       </video>
-                      <a
+                      
+                      <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                        💡 <strong>Dica:</strong> O vídeo pode demorar alguns segundos para carregar. 
+                        Se não aparecer, clique no botão de download abaixo!
+                      </div>
+                      
+                      
                         href={msg.videoUrl}
                         download="tmg-studio-video.mp4"
                         target="_blank"
@@ -428,9 +421,6 @@ export default function Home() {
                       </a>
                     </div>
                   )}
-                </div>
-              </div>
-            ))}
             
             {chatLoading && (
               <div className="flex justify-start">
