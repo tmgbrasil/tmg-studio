@@ -39,7 +39,6 @@ export default function Home() {
       const data = await res.json();
       const assistantMessage = data.response || 'Desculpe, houve um erro.';
       
-      // Detectar se é um prompt otimizado (contém palavras-chave)
       const hasPrompt = assistantMessage.toLowerCase().includes('prompt') || 
                        assistantMessage.toLowerCase().includes('dall-e') ||
                        assistantMessage.toLowerCase().includes('imagem');
@@ -64,7 +63,6 @@ export default function Home() {
     setGeneratingImage(true);
     
     try {
-      // Extrair o prompt da mensagem do Claude
       const message = messages[messageIndex];
       const prompt = message.content;
 
@@ -77,7 +75,6 @@ export default function Home() {
       const data = await res.json();
       
       if (data.imageUrl) {
-        // Atualizar mensagem com a imagem
         setMessages(prev => prev.map((msg, idx) => 
           idx === messageIndex 
             ? { ...msg, imageUrl: data.imageUrl }
@@ -96,7 +93,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-gray-50">
-      {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -114,11 +110,9 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Chat */}
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col" style={{height: 'calc(100vh - 200px)'}}>
           
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {messages.map((msg, idx) => (
               <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -129,7 +123,6 @@ export default function Home() {
                 }`}>
                   <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                   
-                  {/* Botão para gerar imagem */}
                   {msg.role === 'assistant' && msg.hasPrompt && !msg.imageUrl && (
                     <button
                       onClick={() => generateImage(idx)}
@@ -150,7 +143,6 @@ export default function Home() {
                     </button>
                   )}
                   
-                  {/* Preview da imagem */}
                   {msg.imageUrl && (
                     <div className="mt-3 space-y-2">
                       <img 
@@ -158,7 +150,7 @@ export default function Home() {
                         alt="Imagem gerada" 
                         className="w-full rounded-lg border-2 border-orange-200"
                       />
-                      
+                      <a
                         href={msg.imageUrl}
                         download="tmg-studio-image.png"
                         target="_blank"
@@ -184,7 +176,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* Input */}
           <div className="border-t border-gray-200 p-4">
             <div className="flex space-x-3">
               <input
@@ -206,7 +197,7 @@ export default function Home() {
               </button>
             </div>
             <div className="mt-2 text-xs text-gray-500 text-center">
-              Exemplos: "banner para promoção de pizza" • "logo moderno para salão" • "post Instagram café"
+              Exemplos: banner para promoção de pizza • logo moderno para salão • post Instagram café
             </div>
           </div>
         </div>
