@@ -1,10 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Send, Sparkles, Loader2 } from 'lucide-react';
+import { Send, Sparkles, Loader2, Image as ImageIcon, Download } from 'lucide-react';
+
+interface Message {
+  role: string;
+  content: string;
+  hasPrompt?: boolean;
+  imageUrl?: string;
+}
 
 export default function Home() {
-  const [messages, setMessages] = useState<Array<{role: string, content: string}>>([
+  const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
       content: 'Olá! Sou seu assistente de criação visual da TMG Studio. Descreva o material que você precisa e vou te ajudar a criar imagens e vídeos personalizados!'
@@ -12,6 +19,7 @@ export default function Home() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [generatingImage, setGeneratingImage] = useState(false);
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -29,9 +37,17 @@ export default function Home() {
       });
 
       const data = await res.json();
+      const assistantMessage = data.response || 'Desculpe, houve um erro.';
+      
+      // Detectar se é um prompt otimizado (contém palavras-chave)
+      const hasPrompt = assistantMessage.toLowerCase().includes('prompt') || 
+                       assistantMessage.toLowerCase().includes('dall-e') ||
+                       assistantMessage.toLowerCase().includes('imagem');
+      
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: data.response || 'Desculpe, houve um erro.'
+        content: assistantMessage,
+        hasPrompt: hasPrompt
       }]);
     } catch (error) {
       console.error(error);
@@ -41,6 +57,40 @@ export default function Home() {
       }]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generateImage = async (messageIndex: number) => {
+    setGeneratingImage(true);
+    
+    try {
+      // Extrair o prompt da mensagem do Claude
+      const message = messages[messageIndex];
+      const prompt = message.content;
+
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      const data = await res.json();
+      
+      if (data.imageUrl) {
+        // Atualizar mensagem com a imagem
+        setMessages(prev => prev.map((msg, idx) => 
+          idx === messageIndex 
+            ? { ...msg, imageUrl: data.imageUrl }
+            : msg
+        ));
+      } else {
+        alert('Erro ao gerar imagem: ' + (data.error || 'Erro desconhecido'));
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao gerar imagem. Tente novamente.');
+    } finally {
+      setGeneratingImage(false);
     }
   };
 
@@ -57,6 +107,9 @@ export default function Home() {
               <h1 className="text-xl font-bold text-gray-900">TMG Studio</h1>
               <p className="text-xs text-gray-500">Crie materiais visuais com IA</p>
             </div>
+          </div>
+          <div className="text-sm text-gray-600">
+            <span className="font-semibold text-orange-600">Beta</span> • Powered by Claude & DALL-E
           </div>
         </div>
       </div>
@@ -75,6 +128,48 @@ export default function Home() {
                     : 'bg-gray-100 text-gray-800'
                 }`}>
                   <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  
+                  {/* Botão para gerar imagem */}
+                  {msg.role === 'assistant' && msg.hasPrompt && !msg.imageUrl && (
+                    <button
+                      onClick={() => generateImage(idx)}
+                      disabled={generatingImage}
+                      className="mt-3 w-full bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 text-sm font-medium"
+                    >
+                      {generatingImage ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Gerando imagem...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ImageIcon className="w-4 h-4" />
+                          <span>Gerar Imagem com DALL-E</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  
+                  {/* Preview da imagem */}
+                  {msg.imageUrl && (
+                    <div className="mt-3 space-y-2">
+                      <img 
+                        src={msg.imageUrl} 
+                        alt="Imagem gerada" 
+                        className="w-full rounded-lg border-2 border-orange-200"
+                      />
+                      
+                        href={msg.imageUrl}
+                        download="tmg-studio-image.png"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Baixar Imagem</span>
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -111,7 +206,7 @@ export default function Home() {
               </button>
             </div>
             <div className="mt-2 text-xs text-gray-500 text-center">
-              Exemplos: "banner para promoção de pizza" • "vídeo para Instagram do salão"
+              Exemplos: "banner para promoção de pizza" • "logo moderno para salão" • "post Instagram café"
             </div>
           </div>
         </div>
