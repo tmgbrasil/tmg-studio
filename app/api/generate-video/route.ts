@@ -12,39 +12,40 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log('Iniciando geração de vídeo com Replicate:', prompt);
+    console.log('Iniciando geração de vídeo:', prompt);
 
     const replicate = new Replicate({
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    // Usando Luma AI Dream Machine - melhor qualidade
+    // Usando AnimateDiff - modelo estável e disponível
     const output = await replicate.run(
-      "luma/photon:e3a960e1da653509f87c2e36bf7e8da6f2bbb5bed2334f0d2bf2cab5176f8c34",
+      "lucataco/animate-diff:beecf59c4aee8d81bf04f0381033dfa10dc16e845b4ae00d281e2fa377e48a9f",
       {
         input: {
           prompt: prompt,
-          aspect_ratio: "16:9",
-          loop: false,
+          num_frames: 16,
+          guidance_scale: 7.5,
+          num_inference_steps: 25,
         }
       }
     ) as any;
 
-    console.log('Vídeo gerado:', output);
+    console.log('Output recebido:', output);
 
-    // O output pode ser uma URL direta ou um objeto
+    // Extrair URL do vídeo
     let videoUrl = null;
     
     if (typeof output === 'string') {
       videoUrl = output;
-    } else if (output && output.video) {
-      videoUrl = output.video;
     } else if (Array.isArray(output) && output.length > 0) {
       videoUrl = output[0];
+    } else if (output && typeof output === 'object') {
+      videoUrl = output.video || output.output || output.url;
     }
 
     if (!videoUrl) {
-      console.error('URL do vídeo não encontrada:', output);
+      console.error('URL do vídeo não encontrada no output:', output);
       return NextResponse.json(
         { error: 'Vídeo gerado mas URL não encontrada' },
         { status: 500 }
@@ -58,9 +59,12 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    console.error('Erro ao gerar vídeo:', error);
+    console.error('Erro completo:', error);
     return NextResponse.json(
-      { error: error.message || 'Erro ao gerar vídeo' }, 
+      { 
+        error: error.message || 'Erro ao gerar vídeo',
+        details: error.toString()
+      }, 
       { status: 500 }
     );
   }
