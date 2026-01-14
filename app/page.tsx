@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Send, Sparkles, Loader2, Image as ImageIcon, Download } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Send, Sparkles, Loader2, Image as ImageIcon, Download, Coins, AlertCircle } from 'lucide-react';
 
 interface Message {
   role: string;
@@ -20,6 +20,21 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
+  const [credits, setCredits] = useState(50); // Créditos iniciais
+  const [showCreditAlert, setShowCreditAlert] = useState(false);
+
+  // Carregar créditos do localStorage ao iniciar
+  useEffect(() => {
+    const savedCredits = localStorage.getItem('tmg_credits');
+    if (savedCredits) {
+      setCredits(parseInt(savedCredits));
+    }
+  }, []);
+
+  // Salvar créditos no localStorage sempre que mudar
+  useEffect(() => {
+    localStorage.setItem('tmg_credits', credits.toString());
+  }, [credits]);
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -41,7 +56,10 @@ export default function Home() {
       
       const hasPrompt = assistantMessage.toLowerCase().includes('prompt') || 
                        assistantMessage.toLowerCase().includes('dall-e') ||
-                       assistantMessage.toLowerCase().includes('imagem');
+                       assistantMessage.toLowerCase().includes('imagem') ||
+                       assistantMessage.toLowerCase().includes('banner') ||
+                       assistantMessage.toLowerCase().includes('logo') ||
+                       assistantMessage.toLowerCase().includes('criar');
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
@@ -60,6 +78,13 @@ export default function Home() {
   };
 
   const generateImage = async (messageIndex: number) => {
+    // Verificar se tem créditos
+    if (credits <= 0) {
+      setShowCreditAlert(true);
+      setTimeout(() => setShowCreditAlert(false), 5000);
+      return;
+    }
+
     setGeneratingImage(true);
     
     try {
@@ -75,6 +100,10 @@ export default function Home() {
       const data = await res.json();
       
       if (data.imageUrl) {
+        // Decrementar créditos
+        setCredits(prev => prev - 1);
+        
+        // Atualizar mensagem com a imagem
         setMessages(prev => prev.map((msg, idx) => 
           idx === messageIndex 
             ? { ...msg, imageUrl: data.imageUrl }
@@ -91,8 +120,21 @@ export default function Home() {
     }
   };
 
+  const getCreditColor = () => {
+    if (credits > 20) return 'text-green-600';
+    if (credits > 10) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getCreditBgColor = () => {
+    if (credits > 20) return 'bg-green-50 border-green-200';
+    if (credits > 10) return 'bg-yellow-50 border-yellow-200';
+    return 'bg-red-50 border-red-200';
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-gray-50">
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -104,12 +146,51 @@ export default function Home() {
               <p className="text-xs text-gray-500">Crie materiais visuais com IA</p>
             </div>
           </div>
-          <div className="text-sm text-gray-600">
-            <span className="font-semibold text-orange-600">Beta</span> • Powered by Claude & DALL-E
+          
+          {/* Contador de Créditos */}
+          <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-2 ${getCreditBgColor()}`}>
+            <Coins className={`w-5 h-5 ${getCreditColor()}`} />
+            <div>
+              <div className="text-xs text-gray-500">Créditos</div>
+              <div className={`text-lg font-bold ${getCreditColor()}`}>
+                {credits}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Alerta de Créditos Esgotados */}
+      {showCreditAlert && (
+        <div className="max-w-4xl mx-auto px-6 pt-4">
+          <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-red-900">Créditos Esgotados</h3>
+              <p className="text-sm text-red-700 mt-1">
+                Você não tem créditos suficientes para gerar imagens. Entre em contato para renovar seu plano!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alerta de Créditos Baixos */}
+      {credits > 0 && credits <= 10 && !showCreditAlert && (
+        <div className="max-w-4xl mx-auto px-6 pt-4">
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-yellow-900">Créditos Baixos</h3>
+              <p className="text-sm text-yellow-700 mt-1">
+                Você tem apenas {credits} créditos restantes. Considere renovar seu plano em breve.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chat */}
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col" style={{height: 'calc(100vh - 200px)'}}>
           
@@ -126,7 +207,7 @@ export default function Home() {
                   {msg.role === 'assistant' && msg.hasPrompt && !msg.imageUrl && (
                     <button
                       onClick={() => generateImage(idx)}
-                      disabled={generatingImage}
+                      disabled={generatingImage || credits <= 0}
                       className="mt-3 w-full bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2 text-sm font-medium"
                     >
                       {generatingImage ? (
@@ -134,10 +215,15 @@ export default function Home() {
                           <Loader2 className="w-4 h-4 animate-spin" />
                           <span>Gerando imagem...</span>
                         </>
+                      ) : credits <= 0 ? (
+                        <>
+                          <AlertCircle className="w-4 h-4" />
+                          <span>Sem Créditos</span>
+                        </>
                       ) : (
                         <>
                           <ImageIcon className="w-4 h-4" />
-                          <span>Gerar Imagem com DALL-E</span>
+                          <span>Gerar Imagem (1 crédito)</span>
                         </>
                       )}
                     </button>
