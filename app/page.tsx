@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Send, Sparkles, Loader2, Image as ImageIcon, Download, Coins, AlertCircle, LogOut, User } from 'lucide-react';
+import { Send, Sparkles, Loader2, Image as ImageIcon, Download, Coins, AlertCircle, LogOut } from 'lucide-react';
 import AuthForm from '@/components/AuthForm';
 
 interface Message {
@@ -35,7 +35,6 @@ export default function Home() {
   const [generatingImage, setGeneratingImage] = useState(false);
   const [showCreditAlert, setShowCreditAlert] = useState(false);
 
-  // Verificar autenticação ao carregar
   useEffect(() => {
     checkUser();
 
@@ -152,7 +151,6 @@ export default function Home() {
       const data = await res.json();
       
       if (data.imageUrl) {
-        // Decrementar créditos no banco
         const { error } = await supabase
           .from('users')
           .update({ credits_images: userData.credits_images - 1 })
@@ -192,7 +190,6 @@ export default function Home() {
     return 'bg-red-50 border-red-200';
   };
 
-  // Tela de loading
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-gray-50 flex items-center justify-center">
@@ -201,15 +198,12 @@ export default function Home() {
     );
   }
 
-  // Tela de login
   if (!user) {
     return <AuthForm onSuccess={checkUser} />;
   }
 
-  // Tela principal (logado)
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-gray-50">
-      {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -223,7 +217,6 @@ export default function Home() {
           </div>
           
           <div className="flex items-center space-x-4">
-            {/* Contador de Créditos */}
             <div className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-2 ${getCreditBgColor()}`}>
               <Coins className={`w-5 h-5 ${getCreditColor()}`} />
               <div>
@@ -234,7 +227,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Botão Logout */}
             <button
               onClick={handleLogout}
               className="flex items-center space-x-2 px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
@@ -246,7 +238,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Alertas */}
       {showCreditAlert && (
         <div className="max-w-4xl mx-auto px-6 pt-4">
           <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 flex items-start space-x-3">
@@ -275,7 +266,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Chat */}
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col" style={{height: 'calc(100vh - 200px)'}}>
           
@@ -321,7 +311,7 @@ export default function Home() {
                         alt="Imagem gerada" 
                         className="w-full rounded-lg border-2 border-orange-200"
                       />
-                      
+                      <a
                         href={msg.imageUrl}
                         download="tmg-studio-image.png"
                         target="_blank"
