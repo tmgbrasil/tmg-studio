@@ -1,95 +1,64 @@
 import { NextResponse } from 'next/server';
+import Replicate from 'replicate';
 
 export async function POST(req: Request) {
   try {
     const { prompt } = await req.json();
 
-    if (!process.env.RUNWAY_API_KEY) {
+    if (!process.env.REPLICATE_API_TOKEN) {
       return NextResponse.json(
-        { error: 'Chave de API do Runway não configurada' },
+        { error: 'REPLICATE_API_TOKEN não configurada' },
         { status: 500 }
       );
     }
 
-    console.log('Iniciando geração de vídeo:', prompt);
+    console.log('Iniciando geração de vídeo com Replicate:', prompt);
 
-    // URL CORRETA da API do Runway
-    const response = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.RUNWAY_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        promptImage: null,
-        promptText: prompt,
-        model: 'gen3a_turbo',
-        watermark: false,
-        duration: 5,
-        ratio: '16:9',
-      })
+    const replicate = new Replicate({
+      auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Erro Runway:', errorText);
-      return NextResponse.json(
-        { error: `Erro da API Runway: ${errorText}` },
-        { status: 500 }
-      );
-    }
-
-    const data = await response.json();
-    const taskId = data.id;
-
-    console.log('Task criada:', taskId);
-
-    // Polling: aguardar vídeo ficar pronto
-    let videoUrl = null;
-    let attempts = 0;
-    const maxAttempts = 90;
-
-    while (!videoUrl && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      const statusResponse = await fetch(
-        `https://api.dev.runwayml.com/v1/tasks/${taskId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${process.env.RUNWAY_API_KEY}`,
-          }
+    // Usando Luma AI Dream Machine - melhor qualidade
+    const output = await replicate.run(
+      "luma/photon:e3a960e1da653509f87c2e36bf7e8da6f2bbb5bed2334f0d2bf2cab5176f8c34",
+      {
+        input: {
+          prompt: prompt,
+          aspect_ratio: "16:9",
+          loop: false,
         }
-      );
-
-      if (!statusResponse.ok) {
-        attempts++;
-        continue;
       }
+    ) as any;
 
-      const statusData = await statusResponse.json();
-      console.log(`Status (${attempts + 1}):`, statusData.status);
+    console.log('Vídeo gerado:', output);
 
-      if (statusData.status === 'SUCCEEDED') {
-        videoUrl = statusData.output?.[0];
-        break;
-      } else if (statusData.status === 'FAILED') {
-        throw new Error('Falha na geração do vídeo');
-      }
-
-      attempts++;
+    // O output pode ser uma URL direta ou um objeto
+    let videoUrl = null;
+    
+    if (typeof output === 'string') {
+      videoUrl = output;
+    } else if (output && output.video) {
+      videoUrl = output.video;
+    } else if (Array.isArray(output) && output.length > 0) {
+      videoUrl = output[0];
     }
 
     if (!videoUrl) {
-      throw new Error('Timeout na geração do vídeo');
+      console.error('URL do vídeo não encontrada:', output);
+      return NextResponse.json(
+        { error: 'Vídeo gerado mas URL não encontrada' },
+        { status: 500 }
+      );
     }
 
+    console.log('Vídeo gerado com sucesso:', videoUrl);
+
     return NextResponse.json({ 
-      videoUrl: videoUrl,
-      taskId: taskId
+      videoUrl: videoUrl
     });
 
   } catch (error: any) {
-    console.error('Erro:', error);
+    console.error('Erro ao gerar vídeo:', error);
     return NextResponse.json(
       { error: error.message || 'Erro ao gerar vídeo' }, 
       { status: 500 }
