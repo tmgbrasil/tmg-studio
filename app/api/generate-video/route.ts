@@ -18,25 +18,80 @@ export async function POST(req: Request) {
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    console.log('Chamando Zeroscope v2...');
+    console.log('Chamando Stable Video Diffusion...');
 
-    // Usando Zeroscope v2 - modelo mais estável para vídeos
+    // Primeiro, gerar uma imagem base com DALL-E
+    const imageResponse = await fetch('/api/generate-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+
+    let imageUrl = null;
+    if (imageResponse.ok) {
+      const imageData = await imageResponse.json();
+      imageUrl = imageData.imageUrl;
+    }
+
+    // Se não conseguir gerar imagem, usar modelo text-to-video
+    if (!imageUrl) {
+      console.log('Usando modelo text-to-video direto...');
+      
+      const output: any = await replicate.run(
+        "deforum/deforum_stable_diffusion:e22e77495f2fb83c34d5fae2ad8ab63c0a87b6b573b6208e1535b23b89ea66d6",
+        {
+          input: {
+            prompt_text: prompt,
+            max_frames: 60,
+            animation_mode: "2D",
+          }
+        }
+      );
+
+      console.log('Output:', output);
+
+      let videoUrl = null;
+      if (Array.isArray(output) && output.length > 0) {
+        videoUrl = output[output.length - 1]; // Último item é geralmente o vídeo final
+      } else if (typeof output === 'string') {
+        videoUrl = output;
+      } else if (output && typeof output === 'object') {
+        videoUrl = output.video || output.output || output.mp4;
+      }
+
+      if (!videoUrl) {
+        console.error('URL não encontrada. Output:', JSON.stringify(output));
+        return NextResponse.json(
+          { error: 'Erro ao processar vídeo gerado' },
+          { status: 500 }
+        );
+      }
+
+      console.log('Vídeo gerado:', videoUrl);
+
+      return NextResponse.json({ 
+        videoUrl: videoUrl
+      });
+    }
+
+    // Se tiver imagem, usar Stable Video Diffusion
+    console.log('Usando Stable Video Diffusion com imagem base:', imageUrl);
+
     const output: any = await replicate.run(
-      "anotherjesse/zeroscope-v2-xl:9f747673945c62801b13b84701c783929c0ee784e4748ec062204894dda1a351",
+      "stability-ai/stable-video-diffusion:3f0457e4619daac51203dedb472816fd4af51f3149fa7a9e0b5ffcf1b8172438",
       {
         input: {
-          prompt: prompt,
-          num_frames: 24,
-          num_inference_steps: 50,
+          input_image: imageUrl,
+          sizing_strategy: "maintain_aspect_ratio",
+          frames_per_second: 6,
+          motion_bucket_id: 127,
         }
       }
     );
 
-    console.log('Output recebido:', output);
+    console.log('Output:', output);
 
-    // Zeroscope retorna array de URLs
     let videoUrl = null;
-    
     if (Array.isArray(output) && output.length > 0) {
       videoUrl = output[0];
     } else if (typeof output === 'string') {
@@ -44,9 +99,9 @@ export async function POST(req: Request) {
     }
 
     if (!videoUrl) {
-      console.error('URL não encontrada. Output:', output);
+      console.error('URL não encontrada. Output:', JSON.stringify(output));
       return NextResponse.json(
-        { error: 'Vídeo gerado mas URL não encontrada' },
+        { error: 'Erro ao processar vídeo gerado' },
         { status: 500 }
       );
     }
@@ -58,7 +113,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    console.error('Erro:', error.message);
+    console.error('Erro completo:', error);
     return NextResponse.json(
       { error: error.message || 'Erro ao gerar vídeo' }, 
       { status: 500 }
