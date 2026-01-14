@@ -23,11 +23,9 @@ export async function POST(req: Request) {
     });
 
     console.log('Cliente Replicate criado');
-
-    // Usando AnimateDiff
     console.log('Chamando modelo AnimateDiff...');
     
-    const output = await replicate.run(
+    const output: any = await replicate.run(
       "lucataco/animate-diff:beecf59c4aee8d81bf04f0381033dfa10dc16e845b4ae00d281e2fa377e48a9f",
       {
         input: {
@@ -43,7 +41,6 @@ export async function POST(req: Request) {
     console.log('Tipo do output:', typeof output);
     console.log('É array?', Array.isArray(output));
 
-    // Extrair URL do vídeo de forma mais robusta
     let videoUrl = null;
     
     if (typeof output === 'string') {
@@ -87,13 +84,11 @@ export async function POST(req: Request) {
     console.error('=== ERRO NA GERAÇÃO ===');
     console.error('Mensagem:', error.message);
     console.error('Stack:', error.stack);
-    console.error('Erro completo:', JSON.stringify(error, null, 2));
 
     return NextResponse.json(
       { 
         error: error.message || 'Erro desconhecido ao gerar vídeo',
-        details: error.toString(),
-        stack: error.stack
+        details: error.toString()
       }, 
       { status: 500 }
     );
