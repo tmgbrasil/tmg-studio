@@ -18,50 +18,77 @@ export async function POST(req: Request) {
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    // Hotshot-XL: text-to-video direto
-    const output: any = await replicate.run(
-      "lucataco/hotshot-xl:78b3a6257e16e4b241245d65c8b2b81ea2e1ff7ed4c55306b511509ddbfd327a",
-      {
-        input: {
-          prompt: prompt,
-          negative_prompt: "blurry, low quality, distorted, watermark",
-          width: 512,
-          height: 512,
-          num_inference_steps: 30,
-          guidance_scale: 7.5,
-          video_length: 8,
-        }
+    // Usar predictions API para ter controle sobre o polling
+    const prediction = await replicate.predictions.create({
+      version: "78b3a6257e16e4b241245d65c8b2b81ea2e1ff7ed4c55306b511509ddbfd327a",
+      input: {
+        prompt: prompt,
+        negative_prompt: "blurry, low quality, distorted, watermark",
+        width: 512,
+        height: 512,
+        num_inference_steps: 30,
+        guidance_scale: 7.5,
+        video_length: 8,
       }
-    );
+    });
 
-    console.log('Output recebido, tipo:', typeof output);
-    console.log('Output é array?', Array.isArray(output));
-    console.log('Output:', output);
+    console.log('Prediction criada:', prediction.id);
+
+    // Aguardar vídeo ficar pronto
+    let completedPrediction = prediction;
+    let attempts = 0;
+    const maxAttempts = 120; // 4 minutos
+
+    while (
+      completedPrediction.status !== "succeeded" &&
+      completedPrediction.status !== "failed" &&
+      attempts < maxAttempts
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      completedPrediction = await replicate.predictions.get(prediction.id);
+      console.log(`Status (${attempts + 1}):`, completedPrediction.status);
+      
+      attempts++;
+    }
+
+    if (completedPrediction.status === "failed") {
+      console.error('Geração falhou:', completedPrediction.error);
+      return NextResponse.json(
+        { error: `Falha na geração: ${completedPrediction.error}` },
+        { status: 500 }
+      );
+    }
+
+    if (completedPrediction.status !== "succeeded") {
+      console.error('Timeout na geração');
+      return NextResponse.json(
+        { error: 'Timeout: vídeo demorou muito para ser gerado' },
+        { status: 500 }
+      );
+    }
+
+    console.log('Prediction completa:', completedPrediction);
+    console.log('Output:', completedPrediction.output);
 
     let videoUrl = null;
-    
+    const output = completedPrediction.output;
+
     if (typeof output === 'string') {
       videoUrl = output;
-      console.log('Output é string:', videoUrl);
     } else if (Array.isArray(output)) {
-      console.log('Output é array com', output.length, 'itens');
-      // Pega o último item do array
       videoUrl = output[output.length - 1];
-      console.log('Pegando último item:', videoUrl);
     } else if (output && typeof output === 'object') {
-      console.log('Output é objeto com keys:', Object.keys(output));
-      videoUrl = output.video || output.mp4 || output.output || output.url;
+      // Tentar várias propriedades possíveis
+      videoUrl = (output as any).video || (output as any).mp4 || (output as any).url || (output as any).output;
     }
 
     if (!videoUrl || typeof videoUrl !== 'string') {
-      console.error('Erro: URL inválida');
-      console.error('VideoUrl:', videoUrl);
-      console.error('Output completo:', JSON.stringify(output, null, 2));
+      console.error('URL não encontrada no output:', output);
       return NextResponse.json(
         { 
           error: 'Vídeo gerado mas URL não encontrada',
           outputType: typeof output,
-          outputArray: Array.isArray(output),
           output: output
         },
         { status: 500 }
