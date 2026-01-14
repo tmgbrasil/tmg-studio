@@ -12,58 +12,33 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log('Gerando vídeo com Stable Video Diffusion:', prompt);
+    console.log('🎬 Gerando vídeo cinematográfico com Kling AI:', prompt);
 
     const replicate = new Replicate({
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    // PASSO 1: Primeiro gerar uma imagem com DALL-E
-    console.log('Gerando imagem base com DALL-E...');
+    // Kling AI 1.5 - Qualidade cinematográfica profissional
+    console.log('Iniciando geração com Kling AI 1.5...');
     
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: 'OpenAI API key não configurada' },
-        { status: 500 }
-      );
-    }
-
-    const OpenAI = require('openai');
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-
-    const imageResponse = await openai.images.generate({
-      model: "dall-e-3",
-      prompt: prompt,
-      n: 1,
-      size: "1024x1024",
-      quality: "standard",
-    });
-
-    const imageUrl = imageResponse.data[0].url;
-    console.log('Imagem base gerada:', imageUrl);
-
-    // PASSO 2: Animar a imagem com Stable Video Diffusion
-    console.log('Animando imagem com Stable Video Diffusion...');
-
     const prediction = await replicate.predictions.create({
-      version: "3f0457e4619daac51203dedb472816fd4af51f3149fa7a9e0b5ffcf1b8172438",
+      version: "ee7cf78b031d92c9ccdbb1354919c700e96c0c09ff36993c6c0e4782c9f4043d",
       input: {
-        input_image: imageUrl,
-        sizing_strategy: "maintain_aspect_ratio",
-        frames_per_second: 6,
-        motion_bucket_id: 127,
-        cond_aug: 0.02,
+        prompt: prompt,
+        duration: "5", // 5 segundos
+        aspect_ratio: "16:9",
+        cfg_scale: 0.5, // Qualidade vs criatividade
       }
     });
 
-    console.log('Prediction criada:', prediction.id);
+    console.log('✅ Task criada:', prediction.id);
 
-    // Aguardar vídeo ficar pronto
+    // Aguardar vídeo ficar pronto (Kling demora mas vale muito a pena!)
     let completedPrediction = prediction;
     let attempts = 0;
-    const maxAttempts = 120;
+    const maxAttempts = 240; // 8 minutos (Kling pode demorar para alta qualidade)
+
+    console.log('⏳ Gerando vídeo cinematográfico... isso pode levar 3-5 minutos');
 
     while (
       completedPrediction.status !== "succeeded" &&
@@ -72,21 +47,28 @@ export async function POST(req: Request) {
     ) {
       await new Promise(resolve => setTimeout(resolve, 2000));
       completedPrediction = await replicate.predictions.get(prediction.id);
-      console.log(`Status (${attempts + 1}):`, completedPrediction.status);
+      
+      // Log a cada 30 segundos
+      if (attempts % 15 === 0 && attempts > 0) {
+        const elapsed = attempts * 2;
+        console.log(`⏱️  ${elapsed}s decorridos... Status: ${completedPrediction.status}`);
+      }
+      
       attempts++;
     }
 
     if (completedPrediction.status === "failed") {
-      console.error('Geração falhou:', completedPrediction.error);
+      console.error('❌ Geração falhou:', completedPrediction.error);
       return NextResponse.json(
-        { error: `Falha na geração: ${completedPrediction.error}` },
+        { error: `Falha na geração: ${completedPrediction.error || 'Erro desconhecido'}` },
         { status: 500 }
       );
     }
 
     if (completedPrediction.status !== "succeeded") {
+      console.error('⏰ Timeout na geração');
       return NextResponse.json(
-        { error: 'Timeout na geração do vídeo' },
+        { error: 'Timeout: O vídeo demorou muito para ser gerado. Tente novamente ou simplifique o prompt.' },
         { status: 500 }
       );
     }
@@ -94,30 +76,45 @@ export async function POST(req: Request) {
     const output = completedPrediction.output;
     let videoUrl = null;
 
+    // Extrair URL do vídeo
     if (typeof output === 'string') {
       videoUrl = output;
     } else if (Array.isArray(output)) {
-      videoUrl = output[0];
+      videoUrl = output[0]; // Primeiro item do array
+    } else if (output && typeof output === 'object') {
+      videoUrl = (output as any).video || (output as any).mp4 || (output as any).url || (output as any).output;
     }
 
-    if (!videoUrl) {
-      console.error('URL não encontrada:', output);
+    if (!videoUrl || typeof videoUrl !== 'string') {
+      console.error('❌ URL não encontrada no output:', output);
       return NextResponse.json(
-        { error: 'Vídeo gerado mas URL não encontrada' },
+        { 
+          error: 'Vídeo gerado mas URL não encontrada',
+          debug: {
+            outputType: typeof output,
+            output: output
+          }
+        },
         { status: 500 }
       );
     }
 
-    console.log('Vídeo gerado com sucesso:', videoUrl);
+    const totalTime = attempts * 2;
+    console.log(`🎉 Vídeo cinematográfico gerado com sucesso em ${totalTime}s!`);
+    console.log('📹 URL:', videoUrl);
 
     return NextResponse.json({ 
-      videoUrl: videoUrl
+      videoUrl: videoUrl,
+      generationTime: totalTime
     });
 
   } catch (error: any) {
-    console.error('Erro completo:', error);
+    console.error('💥 Erro completo:', error);
     return NextResponse.json(
-      { error: error.message || 'Erro ao gerar vídeo' }, 
+      { 
+        error: error.message || 'Erro ao gerar vídeo',
+        details: error.toString()
+      }, 
       { status: 500 }
     );
   }
