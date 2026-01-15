@@ -1,49 +1,63 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
-export async function POST(req: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { message, references } = await req.json();
+    const { message, references } = await request.json();
 
-    let contextPrompt = '';
-    if (references && references.length > 0) {
-      contextPrompt = `\n\nREFERÊNCIAS VISUAIS:\n${references.map((ref: any) => 
-        `- ${ref.client}: ${ref.style}`
-      ).join('\n')}`;
-    }
+    console.log('💬 Mensagem recebida:', message);
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
-      messages: [{
-        role: 'user',
-        content: `Você é um especialista em design gráfico. Cliente: "${message}"${contextPrompt}
-        
-Analise e:
-1. Identifique o cliente (se nas referências)
-2. Faça perguntas ou gere prompt otimizado
-3. Mantenha identidade visual
+    // Chamar API do Claude (Anthropic)
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [
+          {
+            role: 'user',
+            content: `Você é um assistente de criação visual da TMG Studio. Ajude o usuário a criar materiais visuais (imagens para redes sociais, anúncios, logos, etc).
 
-Seja conversacional e profissional.`
-      }]
+IMPORTANTE: Você gera apenas prompts para IMAGENS. NÃO mencione vídeos em nenhuma hipótese.
+
+Quando o usuário pedir para criar algo:
+1. Entenda o que ele quer
+2. Faça perguntas se necessário para refinar a ideia
+3. Quando tiver informações suficientes, gere um prompt otimizado para DALL-E 3
+4. O prompt deve ser detalhado, descritivo e em inglês
+5. Termine sua mensagem com a palavra "Prompt:" seguido do prompt otimizado
+
+Exemplo de prompt otimizado:
+"Prompt: A modern minimalist logo for a coffee shop, featuring a stylized coffee cup with geometric shapes, warm brown and cream colors, clean lines, professional design, vector art style, on white background"
+
+Mensagem do usuário: ${message}`
+          }
+        ]
+      })
     });
 
-    // 🔧 CORREÇÃO AQUI: Verificar o tipo do conteúdo
-    const textContent = response.content.find(block => block.type === 'text');
-    const responseText = textContent && 'text' in textContent ? textContent.text : 'Erro ao processar resposta';
+    const data = await response.json();
+    const assistantMessage = data.content[0].text;
 
-    return NextResponse.json({ 
-      response: responseText
+    // Verificar se é um prompt otimizado (tem a palavra "Prompt:" ou "prompt:")
+    const hasPrompt = assistantMessage.toLowerCase().includes('prompt:');
+
+    console.log('✅ Resposta gerada');
+    console.log('📝 Tem prompt?', hasPrompt);
+
+    return NextResponse.json({
+      response: assistantMessage,
+      hasPrompt: hasPrompt
     });
 
-  } catch (error) {
-    console.error('Erro:', error);
+  } catch (error: any) {
+    console.error('❌ Erro no chat:', error);
     return NextResponse.json(
-      { error: 'Erro ao processar' }, 
+      { response: 'Desculpe, houve um erro ao processar sua mensagem.' },
       { status: 500 }
     );
   }

@@ -1,42 +1,75 @@
 import { NextResponse } from 'next/server';
 import Replicate from 'replicate';
 
-export async function GET() {
+export async function POST(req: Request) {
   try {
+    const { prompt } = await req.json();
+
     if (!process.env.REPLICATE_API_TOKEN) {
-      return NextResponse.json({
-        error: 'Token não configurado',
-        hasToken: false
-      });
+      return NextResponse.json(
+        { error: 'Token não configurado' },
+        { status: 500 }
+      );
     }
 
     const replicate = new Replicate({
       auth: process.env.REPLICATE_API_TOKEN,
     });
 
-    // Testar com um modelo simples de texto
-    const output = await replicate.run(
-      "meta/llama-2-7b-chat:13c3cdee13ee059ab779f0291d29054dab00a47dad8261375654de5540165fb0",
+    console.log('Gerando vídeo com prompt:', prompt);
+
+    // Hotshot-XL: text-to-video direto, sem precisar de imagem
+    const output: any = await replicate.run(
+      "lucataco/hotshot-xl:78b3a6257e16e4b241245d65c8b2b81ea2e1ff7ed4c55306b511509ddbfd327a",
       {
         input: {
-          prompt: "Hello, just testing!",
-          max_length: 50
+          prompt: prompt,
+          negative_prompt: "blurry, low quality, distorted",
+          width: 512,
+          height: 512,
+          num_inference_steps: 30,
+          guidance_scale: 7.5,
+          video_length: 8, // 8 frames
         }
       }
     );
 
-    return NextResponse.json({
-      success: true,
-      message: 'Replicate está funcionando!',
-      hasToken: true,
-      testOutput: output
+    console.log('Output recebido:', output);
+
+    // Extrair URL do vídeo
+    let videoUrl = null;
+    
+    if (typeof output === 'string') {
+      videoUrl = output;
+    } else if (Array.isArray(output)) {
+      // Pega o último item (geralmente é o vídeo final)
+      videoUrl = output[output.length - 1];
+    } else if (output && typeof output === 'object') {
+      videoUrl = output.video || output.mp4 || output.output;
+    }
+
+    if (!videoUrl || typeof videoUrl !== 'string') {
+      console.error('Erro: URL inválida. Output:', output);
+      return NextResponse.json(
+        { 
+          error: 'Vídeo gerado mas formato inválido',
+          debug: output
+        },
+        { status: 500 }
+      );
+    }
+
+    console.log('Vídeo gerado com sucesso:', videoUrl);
+
+    return NextResponse.json({ 
+      videoUrl: videoUrl
     });
 
   } catch (error: any) {
-    return NextResponse.json({
-      error: error.message,
-      stack: error.stack,
-      fullError: JSON.stringify(error, null, 2)
-    }, { status: 500 });
+    console.error('Erro:', error.message);
+    return NextResponse.json(
+      { error: error.message || 'Erro ao gerar vídeo' }, 
+      { status: 500 }
+    );
   }
 }
