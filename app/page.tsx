@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Send, Sparkles, Loader2, Image as ImageIcon, Download, Coins, AlertCircle, LogOut, File } from 'lucide-react';
+import { Send, Sparkles, Loader2, Image as ImageIcon, Download, AlertCircle, LogOut } from 'lucide-react';
 import AuthForm from '@/components/AuthForm';
 
 const supabase = createClient(
@@ -141,7 +141,6 @@ export default function Home() {
           return newMessages;
         });
 
-        // Atualizar créditos
         await loadUserData(user.id);
       } else {
         alert('Erro ao gerar imagem: ' + data.error);
@@ -178,7 +177,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-gray-50">
-      {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -190,7 +188,6 @@ export default function Home() {
           </div>
 
           <div className="flex items-center space-x-4">
-            {/* Créditos de Imagens */}
             <div className="flex items-center space-x-2 bg-orange-50 px-4 py-2 rounded-lg">
               <ImageIcon className="w-5 h-5 text-orange-600" />
               <div className="text-sm">
@@ -199,7 +196,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Botão de Logout */}
             <button
               onClick={handleLogout}
               className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
@@ -211,10 +207,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-4">
         <div className="w-full max-w-4xl mx-auto space-y-3">
-          {/* Messages */}
           <div className="bg-white border-b border-gray-200 px-4 py-4">
             <div className="max-w-6xl mx-auto flex flex-col space-y-4">
               {messages.map((msg, idx) => (
@@ -231,28 +225,26 @@ export default function Home() {
                   >
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
 
-{/* Preview da Imagem */}
-{msg.imageUrl && (
-  <div className="mt-3 space-y-2">
-    <img
-      src={msg.imageUrl}
-      alt="Imagem gerada"
-      className="w-full rounded-lg border-2 border-orange-200"
-    />
-    
-      href={msg.imageUrl}
-      download="tmg-studio-image.png"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center justify-center space-x-2 bg-gradient-to-br from-orange-600 to-orange-700 text-white px-4 py-2 rounded-lg hover:from-orange-700 hover:to-orange-800 transition-all"
-    >
-      <Download className="w-4 h-4" />
-      <span>Baixar Imagem</span>
-    </a>
-  </div>
-)}
+                    {msg.imageUrl && (
+                      <div className="mt-3 space-y-2">
+                        <img
+                          src={msg.imageUrl}
+                          alt="Imagem gerada"
+                          className="w-full rounded-lg border-2 border-orange-200"
+                        />
+                        
+                          href={msg.imageUrl}
+                          download="tmg-studio-image.png"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center space-x-2 bg-gradient-to-br from-orange-600 to-orange-700 text-white px-4 py-2 rounded-lg hover:from-orange-700 hover:to-orange-800 transition-all"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Baixar Imagem</span>
+                        </a>
+                      </div>
+                    )}
 
-                    {/* Botão de Gerar Imagem */}
                     {msg.role === 'assistant' && msg.hasPrompt && !msg.imageUrl && idx === messages.length - 1 && (
                       <div className="mt-3 flex items-center space-x-2">
                         <button
@@ -295,7 +287,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Input */}
           <div className="bg-white border-t border-gray-200 px-4 py-4">
             <div className="max-w-6xl mx-auto flex items-center space-x-2">
               <input
