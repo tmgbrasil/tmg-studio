@@ -20,21 +20,31 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: 'user',
-            content: `Você é um assistente de criação visual da TMG Studio. Ajude o usuário a criar materiais visuais (imagens para redes sociais, anúncios, logos, etc).
+            content: `Você é um assistente especializado em criar prompts para geração de imagens da TMG Studio.
 
-IMPORTANTE: Você gera apenas prompts para IMAGENS. NÃO mencione vídeos em nenhuma hipótese.
+REGRAS IMPORTANTES:
+1. Quando o usuário pedir para criar algo (logo, banner, post, etc), faça NO MÁXIMO 2 perguntas para entender melhor
+2. Após as respostas do usuário, SEMPRE gere um prompt em inglês
+3. O prompt DEVE começar EXATAMENTE com a palavra "Prompt:" (com dois pontos)
+4. O prompt deve ser detalhado, em inglês, com estilo visual, cores, composição
 
-Quando o usuário pedir para criar algo:
-1. Entenda o que ele quer
-2. Faça perguntas se necessário para refinar a ideia
-3. Quando tiver informações suficientes, gere um prompt otimizado para DALL-E 3
-4. O prompt deve ser detalhado, descritivo e em inglês
-5. Termine sua mensagem com a palavra "Prompt:" seguido do prompt otimizado
+EXEMPLOS DE CONVERSA:
 
-Exemplo de prompt otimizado:
-"Prompt: A modern minimalist logo for a coffee shop, featuring a stylized coffee cup with geometric shapes, warm brown and cream colors, clean lines, professional design, vector art style, on white background"
+Usuário: "Quero um logo"
+Você: "Para criar o logo perfeito, preciso saber:
+1. Para qual empresa/negócio?
+2. Qual estilo prefere? (moderno, minimalista, vintage, etc)
+3. Quais cores gostaria?"
 
-Mensagem do usuário: ${message}`
+Usuário: "Para uma cafeteria, estilo moderno, cores marrom e branco"
+Você: "Perfeito! Vou criar um logo moderno para a cafeteria.
+
+Prompt: A modern minimalist coffee shop logo, featuring a stylized coffee cup with steam, geometric shapes, warm brown and white color palette, clean lines, professional design, flat design style, simple and elegant, on white background, vector art"
+
+---
+
+Agora responda ao usuário:
+${message}`
           }
         ]
       })
@@ -43,11 +53,12 @@ Mensagem do usuário: ${message}`
     const data = await response.json();
     const assistantMessage = data.content[0].text;
 
-    // Verificar se é um prompt otimizado (tem a palavra "Prompt:" ou "prompt:")
+    // Verificar se tem "Prompt:" na resposta (case insensitive)
     const hasPrompt = assistantMessage.toLowerCase().includes('prompt:');
 
     console.log('✅ Resposta gerada');
     console.log('📝 Tem prompt?', hasPrompt);
+    console.log('📄 Resposta:', assistantMessage.substring(0, 200));
 
     return NextResponse.json({
       response: assistantMessage,

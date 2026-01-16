@@ -171,9 +171,9 @@ export default function Home() {
     );
   }
 
-if (!user) {
-  return <AuthForm onSuccess={checkUser} />;  // ✅ CORRETO
-}
+  if (!user) {
+    return <AuthForm onSuccess={checkUser} />;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-gray-50">
@@ -218,7 +218,7 @@ if (!user) {
                         </a>
                       </div>
                     )}
-                    {msg.role === 'assistant' && msg.hasPrompt && !msg.imageUrl && idx === messages.length - 1 && (
+                    {msg.role === 'assistant' && !msg.imageUrl && idx === messages.length - 1 && (
                       <div className="mt-3 flex items-center space-x-2">
                         <button onClick={handleGenerateImage} disabled={generatingImage || (userData?.credits_images || 0) <= 0} className="flex items-center space-x-2 bg-gradient-to-br from-orange-600 to-orange-700 text-white px-4 py-2 rounded-lg hover:from-orange-700 hover:to-orange-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
                           {generatingImage ? (
